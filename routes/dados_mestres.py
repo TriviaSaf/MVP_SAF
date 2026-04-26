@@ -1,5 +1,6 @@
 import os
 from flask import Blueprint, jsonify, request
+from dotenv import load_dotenv
 from supabase import Client, create_client
 
 load_dotenv()
