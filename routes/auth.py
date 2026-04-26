@@ -1,6 +1,9 @@
 import os
+from dotenv import load_dotenv
 from flask import Blueprint, jsonify, request
 from supabase import Client, create_client
+
+load_dotenv()
 
 auth_bp = Blueprint("auth_bp", __name__)
 
