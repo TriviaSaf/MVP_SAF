@@ -2,4 +2,5 @@ flask
 supabase
 python-dotenv
 requests
+chardet<6
 gunicorn==23.0.0

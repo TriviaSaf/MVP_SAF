@@ -725,8 +725,8 @@ document.addEventListener('DOMContentLoaded', async function () {
     const canvas = document.getElementById('cam-canvas');
     canvas.width  = video.videoWidth  || 1280;
     canvas.height = video.videoHeight || 720;
-    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
     let gps = null;
     try {
@@ -737,6 +737,30 @@ document.addEventListener('DOMContentLoaded', async function () {
         acc: Math.round(pos.coords.accuracy)
       };
     } catch (_) { /* GPS opcional */ }
+
+    // Gravar coordenadas GPS na imagem (centro-inferior)
+    if (gps) {
+      const text = `Lat ${gps.lat}, Lng ${gps.lng}  (\xb1${gps.acc}m)`;
+      const fontSize = Math.max(18, Math.round(canvas.width * 0.022));
+      ctx.save();
+      ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const textW  = ctx.measureText(text).width;
+      const padX   = fontSize * 0.7;
+      const padY   = fontSize * 0.5;
+      const bgW    = textW + padX * 2;
+      const bgH    = fontSize + padY * 2;
+      const bgX    = (canvas.width - bgW) / 2;
+      const bgY    = canvas.height - bgH - Math.round(canvas.height * 0.025);
+      ctx.fillStyle = 'rgba(0,0,0,0.60)';
+      ctx.fillRect(bgX, bgY, bgW, bgH);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(text, canvas.width / 2, bgY + bgH / 2);
+      ctx.restore();
+    }
+
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
 
     window._capturedPhoto = { dataUrl, gps };
     document.getElementById('foto_lat').value = gps ? gps.lat : '';

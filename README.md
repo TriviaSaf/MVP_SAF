@@ -1,4 +1,4 @@
-# TRIVIASAF — Sistema de Abertura de Falhas
+# MVP_TV — Sistema de Abertura de Falhas
 
 Aplicação web responsiva que atua como cockpit de entrada para criação e triagem de solicitações de manutenção, com integração bidirecional ao SAP (via Mock de BAPI/REST).
 
@@ -27,8 +27,8 @@ Aplicação web responsiva que atua como cockpit de entrada para criação e tri
 
 ```bash
 # 1. Clone o repositório
-git clone https://github.com/Devssaur/TRIVIASAF.git
-cd TRIVIASAF
+git clone https://github.com/Devssaur/MVP_TV.git
+cd MVP_TVF
 
 # 2. Crie e ative o ambiente virtual
 python -m venv venv
@@ -171,7 +171,7 @@ Acesse: `http://127.0.0.1:5000/`
 ## Estrutura do Projeto
 
 ```
-TRIVIASAF/
+MVP_TV/
 ├── app.py                  # Ponto de entrada Flask
 ├── .env                    # Credenciais (não versionado)
 ├── .gitignore

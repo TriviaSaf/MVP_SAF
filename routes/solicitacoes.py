@@ -2,6 +2,7 @@ import os
 import base64
 import traceback
 import uuid
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 from flask import Blueprint, jsonify, request, current_app
 from supabase import Client, create_client
@@ -243,7 +244,8 @@ def criar_saf():
                     len(foto_b64),
                 )
                 img_bytes = base64.b64decode(foto_b64)
-                storage_path = f"safs/{saf_id}/evidencia.jpg"
+                ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+                storage_path = f"safs/{saf_id}/{ts}_evidencia.jpg"
                 supabase.storage.from_("saf-evidencias").upload(
                     path=storage_path,
                     file=img_bytes,
