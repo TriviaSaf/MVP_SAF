@@ -464,7 +464,7 @@
     if (status === 'ABERTA') {
       actionsHtml = `
         <button class="btn btn-success btn-sm" onclick="window._ccmMostrarAceite('${id}')">&#10003; Aceitar</button>
-        <button class="btn btn-danger btn-sm" onclick="window._ccmRecusar('${id}')">&#10007; Recusar</button>`;
+        <button class="btn btn-danger btn-sm" onclick="window._ccmMostrarRecusa('${id}')">&#10007; Recusar</button>`;
     } else if (status === 'APROVADA') {
       actionsHtml = `<span style="font-size:.8rem;color:var(--green);font-weight:600;">&#10004; Aprovada</span>`;
     } else if (status === 'DEVOLVIDA') {
@@ -610,25 +610,6 @@
     Toast.success('SAF devolvida ao solicitante.');
   }
 
-  async function recusar(id) {
-    const user = Auth.getUser();
-    const actDiv = document.getElementById('actions-' + id);
-    if (actDiv) actDiv.innerHTML = `<div class="spinner" style="width:18px;height:18px;"></div>`;
-
-    const res = await API.avaliarSaf(id, { status: 'DEVOLVIDA', avaliador_id: user?.id });
-    if (!res.ok) {
-      Toast.error(res.data.erro || 'Erro ao recusar a SAF.');
-      renderQueue();
-      return;
-    }
-    // Remove o item da lista local (recusadas não aparecem na fila)
-    allSafs = allSafs.filter(s => s.id !== id);
-    updateStats();
-    populateEquipFilter();
-    renderQueue();
-    Toast.success('SAF devolvida ao solicitante.');
-  }
-
   async function toggleSap(id, currentVal) {
     const novoValor = !currentVal;
     const res = await API.toggleSap(id, novoValor);
@@ -642,7 +623,7 @@
   // Expose for inline onclick handlers
   window._ccmAceitar       = aceitar;
   window._ccmMostrarAceite  = mostrarAceite;
-  window._ccmRecusar        = recusar;
+  window._ccmConfirmarRecusa = confirmarRecusa;
   window._ccmMostrarRecusa = mostrarRecusa; // compat
   window._ccmToggleSap     = toggleSap;
   window._ccmRenderQueue   = renderQueue;

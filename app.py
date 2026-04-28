@@ -86,4 +86,4 @@ def acesso_negado():
 
 if __name__ == "__main__":
     # debug=True é excelente para desenvolvimento (reinicia ao salvar)
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)

@@ -55,6 +55,8 @@ def avaliar_saf(solicitacao_id):
 
     if novo_status not in ('APROVADA', 'DEVOLVIDA'):
         return jsonify({"erro": "Status inválido. Use APROVADA ou DEVOLVIDA."}), 400
+    if novo_status == 'DEVOLVIDA' and not motivo:
+        return jsonify({"erro": "Informe o motivo da devolução."}), 400
 
     try:
         supabase = _get_supabase_client()
@@ -63,7 +65,7 @@ def avaliar_saf(solicitacao_id):
             "avaliado_por": avaliador_id,
             "data_avaliacao": datetime.now(timezone.utc).isoformat()
         }
-        if novo_status == 'DEVOLVIDA' and motivo:
+        if novo_status == 'DEVOLVIDA':
             update_data["motivo_devolucao"] = motivo
 
         supabase.table('saf_solicitacoes') \
