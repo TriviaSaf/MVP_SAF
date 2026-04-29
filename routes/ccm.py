@@ -17,6 +17,23 @@ def _get_supabase_client() -> Client:
     return create_client(url, key)
 
 
+def _normalize_prioridade(valor) -> str:
+    p = str(valor or '').strip().upper()
+    mapping = {
+        '1': 'BAIXA',
+        '2': 'MEDIA',
+        '3': 'ALTA',
+        '4': 'CRITICA',
+        'BAIXA': 'BAIXA',
+        'MEDIA': 'MEDIA',
+        'MÉDIA': 'MEDIA',
+        'ALTA': 'ALTA',
+        'CRITICA': 'CRITICA',
+        'CRÍTICA': 'CRITICA',
+    }
+    return mapping.get(p, '')
+
+
 # ==========================================
 # 1. ROTA GET: Listar SAFs para a fila CCM (exceto devolvidas)
 # ==========================================
@@ -52,9 +69,12 @@ def avaliar_saf(solicitacao_id):
     novo_status  = dados.get('status', '')
     motivo       = (dados.get('motivo_devolucao') or '').strip()
     avaliador_id = dados.get('avaliador_id')
+    prioridade = _normalize_prioridade(dados.get('prioridade'))
 
     if novo_status not in ('APROVADA', 'DEVOLVIDA'):
         return jsonify({"erro": "Status inválido. Use APROVADA ou DEVOLVIDA."}), 400
+    if novo_status == 'DEVOLVIDA' and not motivo:
+        return jsonify({"erro": "Informe o motivo da devolução."}), 400
 
     try:
         supabase = _get_supabase_client()
@@ -63,7 +83,9 @@ def avaliar_saf(solicitacao_id):
             "avaliado_por": avaliador_id,
             "data_avaliacao": datetime.now(timezone.utc).isoformat()
         }
-        if novo_status == 'DEVOLVIDA' and motivo:
+        if prioridade:
+            update_data["prioridade"] = prioridade
+        if novo_status == 'DEVOLVIDA':
             update_data["motivo_devolucao"] = motivo
 
         supabase.table('saf_solicitacoes') \
@@ -207,6 +229,97 @@ def avaliar_saf(solicitacao_id):
         return jsonify({"mensagem": f"SAF atualizada para {novo_status}."}), 200
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
+
+
+# ==========================================
+# 2.1 ROTA PUT: Atualizar criticidade/prioridade pelo CCM
+# ==========================================
+@ccm_bp.route('/prioridade/<string:solicitacao_id>', methods=['PUT'])
+def atualizar_prioridade_ccm(solicitacao_id):
+    dados = request.json or {}
+    prioridade = _normalize_prioridade(dados.get('prioridade'))
+    if not prioridade:
+        return jsonify({"erro": "Prioridade inválida. Use BAIXA, MEDIA, ALTA ou CRITICA."}), 400
+
+    try:
+        supabase = _get_supabase_client()
+        supabase.table('saf_solicitacoes') \
+            .update({'prioridade': prioridade}) \
+            .eq('id', solicitacao_id) \
+            .execute()
+        return jsonify({'mensagem': 'Prioridade atualizada.', 'prioridade': prioridade}), 200
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+
+
+# ==========================================
+# 2.2 ROTA PUT: Marcar ordens como DUPLICADA em lote
+# ==========================================
+@ccm_bp.route('/duplicar-lote', methods=['PUT'])
+def duplicar_lote_ccm():
+    dados = request.json or {}
+    ids = dados.get('ids') or []
+    avaliador_id = dados.get('avaliador_id')
+
+    if not isinstance(ids, list) or not ids:
+        return jsonify({'erro': 'Informe uma lista de IDs para duplicar.'}), 400
+
+    # Remove vazios e duplicados preservando ordem
+    ids_limpos = []
+    vistos = set()
+    for sid in ids:
+        sid_txt = str(sid or '').strip()
+        if not sid_txt or sid_txt in vistos:
+            continue
+        vistos.add(sid_txt)
+        ids_limpos.append(sid_txt)
+
+    if not ids_limpos:
+        return jsonify({'erro': 'Nenhum ID valido foi informado.'}), 400
+
+    try:
+        supabase = _get_supabase_client()
+        abertas = supabase.table('saf_solicitacoes') \
+            .select('id') \
+            .in_('id', ids_limpos) \
+            .eq('status', 'ABERTA') \
+            .execute()
+
+        abertas_ids = [r.get('id') for r in (abertas.data or []) if r.get('id')]
+        if not abertas_ids:
+            return jsonify({'erro': 'Nenhuma ordem aberta encontrada para marcar como duplicada.'}), 400
+
+        agora = datetime.now(timezone.utc).isoformat()
+        for sid in abertas_ids:
+            supabase.table('saf_solicitacoes') \
+                .update({
+                    'status': 'DUPLICADA',
+                    'data_avaliacao': agora,
+                    'avaliado_por': avaliador_id,
+                }) \
+                .eq('id', sid) \
+                .execute()
+
+        try:
+            supabase.table('logs_auditoria').insert({
+                'evento': 'CCM_DUPLICADA_LOTE',
+                'payload': {
+                    'total_solicitado': len(ids_limpos),
+                    'total_marcado': len(abertas_ids),
+                    'ids': abertas_ids,
+                    'avaliador_id': avaliador_id,
+                },
+            }).execute()
+        except Exception:
+            pass
+
+        return jsonify({
+            'mensagem': 'Ordens marcadas como duplicadas.',
+            'total_marcado': len(abertas_ids),
+            'ids_marcados': abertas_ids,
+        }), 200
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
 
 
 # ==========================================

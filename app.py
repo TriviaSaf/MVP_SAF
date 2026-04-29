@@ -4,7 +4,8 @@ from flask import Flask, jsonify, render_template
 from dotenv import load_dotenv
 
 # Carrega as variaveis antes de importar modulos que dependem delas.
-load_dotenv()
+# override=True evita que variaveis antigas do shell mascararem valores do .env.
+load_dotenv(override=True)
 
 from routes.auth import auth_bp
 from routes.solicitacoes import solicitacoes_bp
@@ -86,4 +87,4 @@ def acesso_negado():
 
 if __name__ == "__main__":
     # debug=True é excelente para desenvolvimento (reinicia ao salvar)
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
