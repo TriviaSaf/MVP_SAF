@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>{% block title %}MVP SAF{% endblock %}</title>
-  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/saf.css') }}">
   {% block head %}{% endblock %}
 </head>
@@ -17,12 +17,12 @@
     <div class="toolbar-brand">
       <button class="toolbar-menu-btn" aria-label="Menu">&#9776;</button>
       <div class="toolbar-brand-text">
-        <span class="toolbar-title">MVP SAF</span>
+        <span class="toolbar-title">SAF</span>
         <span class="toolbar-user-sub" id="toolbar-user-name"></span>
       </div>
     </div>
     <div class="toolbar-user">
-      <img src="{{ url_for('static', filename='logo.png') }}" class="toolbar-logo" alt="MVP SAF">
+      <img src="{{ url_for('static', filename='logo.png') }}" class="toolbar-logo" alt="SAF">
     </div>
   </div>
   <!-- Row 2: Nav tabs (navy) -->
@@ -35,7 +35,7 @@
 <div class="sidebar-overlay" id="sidebar-overlay"></div>
 <aside class="sidebar" id="sidebar" aria-label="Menu lateral">
   <div class="sidebar-header">
-    <img src="{{ url_for('static', filename='logo.png') }}" class="sidebar-logo" alt="MVP SAF">
+    <img src="{{ url_for('static', filename='logo.png') }}" class="sidebar-logo" alt="SAF">
   </div>
   <nav class="sidebar-nav" id="sidebar-nav"></nav>
   <div class="sidebar-footer">
