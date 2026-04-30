@@ -22,16 +22,37 @@
     <button class="filter-tab active" data-filter="PENDENTES">Pendentes</button>
     <button class="filter-tab" data-filter="TODAS">Todas</button>
     <button class="filter-tab" data-filter="APROVADA">Aprovadas</button>
-    <button class="filter-tab" data-filter="DUPLICADA">Duplicatas</button>
+    <button class="filter-tab" data-filter="DUPLICADA">Duplicadas</button>
     <button class="filter-tab" data-filter="CANCELADA">Canceladas</button>
   </div>
 
   <!-- Equipment filter -->
-  <div class="equip-filter-bar">
-    <label class="equip-filter-label" for="equip-filter">&#9874; Equipamento</label>
-    <select id="equip-filter" class="equip-filter-select">
-      <option value="">Todos os equipamentos</option>
-    </select>
+  <div class="equip-filter-bar ccm-advanced-filters">
+    <div class="ccm-filter-item">
+      <label class="equip-filter-label" for="line-filter">Linha</label>
+      <select id="line-filter" class="equip-filter-select">
+        <option value="">Todas as linhas</option>
+      </select>
+    </div>
+
+    <div class="ccm-filter-item">
+      <label class="equip-filter-label" for="station-filter">Estação</label>
+      <select id="station-filter" class="equip-filter-select">
+        <option value="">Todas as estações</option>
+      </select>
+    </div>
+
+    <div class="ccm-filter-item">
+      <label class="equip-filter-label" for="date-from-filter">Data notificacao (de)</label>
+      <input id="date-from-filter" class="equip-filter-select" type="date">
+    </div>
+
+    <div class="ccm-filter-item">
+      <label class="equip-filter-label" for="date-to-filter">Data notificacao (ate)</label>
+      <input id="date-to-filter" class="equip-filter-select" type="date">
+    </div>
+
+    <button class="btn btn-ghost btn-sm" id="btn-clear-ccm-filters" type="button">Limpar filtros</button>
   </div>
 
   <!-- Queue -->
@@ -411,9 +432,18 @@
 .equip-filter-bar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: .65rem;
   margin-top: .5rem;
   margin-bottom: .25rem;
+}
+.ccm-filter-item {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+}
+.ccm-advanced-filters {
+  margin-bottom: .5rem;
 }
 .equip-filter-label {
   font-size: .82rem;
@@ -518,9 +548,95 @@
 (function () {
   let allSafs      = [];
   let activeFilter = 'PENDENTES';
-  let activeEquip  = '';
+  let activeLine   = '';
+  let activeStation = '';
+  let activeDateFrom = '';
+  let activeDateTo   = '';
+  let estacoesCache = [];
+  let estacaoById = new Map();
+  let estacoesPorLinha = new Map();
   const duplicateModeGroups = new Set();
   const duplicateSelections = new Map();
+
+  function toDateKey(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toISOString().slice(0, 10);
+  }
+
+  function norm(v) {
+    return String(v || '').trim().toLowerCase();
+  }
+
+  function parseLinha(item) {
+    const est = estacaoById.get(String(item.local_instalacao_id || '').trim());
+    if (est?.linha) return String(est.linha).trim();
+
+    const local = String(item.local_instalacao || '');
+    const lid = String(item.local_instalacao_id || '');
+    const titulo = String(item.titulo_falha || '');
+    const composed = `${local} ${lid} ${titulo}`;
+
+    const mLinha = composed.match(/linha\s*(\d{1,2})/i);
+    if (mLinha && mLinha[1]) return mLinha[1];
+
+    const mTv = composed.match(/\bTV\s*([0-9]{2})\b/i);
+    if (mTv && mTv[1]) return mTv[1];
+
+    return '';
+  }
+
+  function parseEstacao(item) {
+    const est = estacaoById.get(String(item.local_instalacao_id || '').trim());
+    if (est?.estacao) return String(est.estacao).trim();
+
+    const local = String(item.local_instalacao || '').trim();
+    if (!local) return '';
+
+    const m = local.match(/estac[aã]o\s+([^\-()]+)/i);
+    if (m && m[1]) return String(m[1]).trim();
+
+    return local;
+  }
+
+  function enrichSafForFilters(item) {
+    const linha = parseLinha(item);
+    const estacao = parseEstacao(item);
+    const dataNotificacao = toDateKey(item.criado_em);
+    return {
+      ...item,
+      _linha: linha,
+      _estacao: estacao,
+      _data_notificacao: dataNotificacao,
+    };
+  }
+
+  function rebuildEstacaoLookup() {
+    estacaoById = new Map();
+    estacoesPorLinha = new Map();
+    (estacoesCache || []).forEach(e => {
+      const id = String(e.id || '').trim();
+      const linha = String(e.linha || '').trim();
+      const estacao = String(e.estacao || '').trim();
+      if (!id) return;
+      estacaoById.set(id, { linha, estacao });
+      if (!linha || !estacao) return;
+      if (!estacoesPorLinha.has(linha)) estacoesPorLinha.set(linha, new Set());
+      estacoesPorLinha.get(linha).add(estacao);
+    });
+  }
+
+  async function carregarCatalogoEstacoes() {
+    const res = await API.estacoes();
+    if (!res.ok) {
+      estacoesCache = [];
+      rebuildEstacaoLookup();
+      return;
+    }
+    estacoesCache = res.data?.estacoes || [];
+    rebuildEstacaoLookup();
+  }
 
   // ───────── Stats ─────────
   function updateStats() {
@@ -546,18 +662,71 @@
     else if (activeFilter === 'DUPLICADA') items = items.filter(s => s.status === 'DUPLICADA');
     else if (activeFilter === 'CANCELADA') items = items.filter(s => s.status === 'CANCELADA');
     // TODAS: mostra tudo
-    if (activeEquip) items = items.filter(s => (s.equipamento || '') === activeEquip);
+    if (activeLine) items = items.filter(s => String(s._linha || '') === activeLine);
+    if (activeStation) items = items.filter(s => norm(s._estacao) === norm(activeStation));
+    if (activeDateFrom) items = items.filter(s => {
+      const d = String(s._data_notificacao || '');
+      return d && d >= activeDateFrom;
+    });
+    if (activeDateTo) items = items.filter(s => {
+      const d = String(s._data_notificacao || '');
+      return d && d <= activeDateTo;
+    });
     return items;
   }
 
-  function populateEquipFilter() {
-    const sel = document.getElementById('equip-filter');
+  function populateLineFilter() {
+    const sel = document.getElementById('line-filter');
     if (!sel) return;
-    const equips = [...new Set(allSafs.map(s => s.equipamento || '').filter(Boolean))].sort();
-    sel.innerHTML = `<option value="">Todos os equipamentos</option>` +
-      equips.map(e => `<option value="${e}">${e}</option>`).join('');
-    if (equips.includes(activeEquip)) sel.value = activeEquip;
-    else activeEquip = '';
+
+    const linhasData = [...new Set(allSafs.map(s => String(s._linha || '').trim()).filter(Boolean))];
+    const linhasCatalogo = [...estacoesPorLinha.keys()];
+    const linhas = [...new Set([...linhasCatalogo, ...linhasData])]
+      .sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
+
+    sel.innerHTML = '<option value="">Todas as linhas</option>' +
+      linhas.map(l => `<option value="${l}">${l}</option>`).join('');
+
+    if (linhas.includes(activeLine)) sel.value = activeLine;
+    else activeLine = '';
+  }
+
+  function populateStationFilter() {
+    const sel = document.getElementById('station-filter');
+    if (!sel) return;
+
+    const fromData = allSafs
+      .filter(s => !activeLine || String(s._linha || '') === activeLine)
+      .map(s => String(s._estacao || '').trim())
+      .filter(Boolean);
+
+    const fromCatalogo = activeLine && estacoesPorLinha.has(activeLine)
+      ? [...estacoesPorLinha.get(activeLine)]
+      : [];
+
+    const estacoes = [...new Set([...fromCatalogo, ...fromData])]
+      .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+    sel.innerHTML = '<option value="">Todas as estações</option>' +
+      estacoes.map(e => `<option value="${escHtml(e)}">${escHtml(e)}</option>`).join('');
+
+    if (estacoes.some(e => norm(e) === norm(activeStation))) {
+      const matched = estacoes.find(e => norm(e) === norm(activeStation));
+      sel.value = matched || '';
+      activeStation = matched || '';
+    } else {
+      activeStation = '';
+      sel.value = '';
+    }
+  }
+
+  function syncFilterControls() {
+    const dateFromEl = document.getElementById('date-from-filter');
+    const dateToEl = document.getElementById('date-to-filter');
+    if (dateFromEl) dateFromEl.value = activeDateFrom;
+    if (dateToEl) dateToEl.value = activeDateTo;
+    populateLineFilter();
+    populateStationFilter();
   }
 
   function escHtml(text) {
@@ -592,10 +761,10 @@
       return;
     }
 
-    // Group by equipment
+    // Group by equipment (fallback: titulo_falha)
     const groups = new Map();
     items.forEach(item => {
-      const key = item.equipamento || 'Sem Equipamento';
+      const key = item.equipamento || item.titulo_falha || 'Sem Equipamento';
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(item);
     });
@@ -901,7 +1070,7 @@
   }
 
   function toggleDuplicadoGroup(equip) {
-    const hasOpen = allSafs.some(s => s.status === 'ABERTA' && (s.equipamento || 'Sem Equipamento') === equip);
+    const hasOpen = allSafs.some(s => s.status === 'ABERTA' && (s.equipamento || s.titulo_falha || 'Sem Equipamento') === equip);
     if (!hasOpen) {
       Toast.warning('Nao ha ordens abertas para este equipamento.');
       return;
@@ -950,7 +1119,7 @@
   function confirmarDuplicadasGrupo(equip) {
     const selecionados = getSelectionSet(equip);
     const idsLote = allSafs
-      .filter(s => s.status === 'ABERTA' && (s.equipamento || 'Sem Equipamento') === equip && selecionados.has(s.id))
+      .filter(s => s.status === 'ABERTA' && (s.equipamento || s.titulo_falha || 'Sem Equipamento') === equip && selecionados.has(s.id))
       .map(s => s.id);
 
     if (!idsLote.length) {
@@ -1027,9 +1196,9 @@
       }
       return;
     }
-    allSafs = res.data || [];
+    allSafs = (res.data || []).map(enrichSafForFilters);
     updateStats();
-    populateEquipFilter();
+    syncFilterControls();
     renderQueue();
     // Atualiza indicador de última sincronização
     const el = document.getElementById('last-sync');
@@ -1055,8 +1224,34 @@
       });
     });
 
-    document.getElementById('equip-filter')?.addEventListener('change', function () {
-      activeEquip = this.value;
+    document.getElementById('line-filter')?.addEventListener('change', function () {
+      activeLine = this.value;
+      activeStation = '';
+      populateStationFilter();
+      renderQueue();
+    });
+
+    document.getElementById('station-filter')?.addEventListener('change', function () {
+      activeStation = this.value;
+      renderQueue();
+    });
+
+    document.getElementById('date-from-filter')?.addEventListener('change', function () {
+      activeDateFrom = this.value || '';
+      renderQueue();
+    });
+
+    document.getElementById('date-to-filter')?.addEventListener('change', function () {
+      activeDateTo = this.value || '';
+      renderQueue();
+    });
+
+    document.getElementById('btn-clear-ccm-filters')?.addEventListener('click', function () {
+      activeLine = '';
+      activeStation = '';
+      activeDateFrom = '';
+      activeDateTo = '';
+      syncFilterControls();
       renderQueue();
     });
 
@@ -1064,7 +1259,9 @@
       loadQueue(false);
     });
 
-    loadQueue(false);
+    carregarCatalogoEstacoes().finally(() => {
+      loadQueue(false);
+    });
 
     // Polling silencioso a cada 30 segundos
     setInterval(() => loadQueue(true), 30000);
